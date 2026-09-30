@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サッカー分析ラボ</title>
+<meta name="description" content="サッカーの試合動画にタグを付けるだけで、個人成績・xG・ショットマップ・得点/失点シーンのハイライト動画・アドバイスを自動で作るブラウザアプリ">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ffffff' stroke='%23222' stroke-width='3'/%3E%3Cpath d='M32 20l10 7-4 12H26l-4-12z' fill='%23222'/%3E%3Cpath d='M32 20V8M42 27l11-4M38 39l7 10M26 39l-7 10M22 27L11 23' stroke='%23222' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">⚽</span>
+      <div class="brand-text"><b>サッカー分析ラボ</b><small>動画にタグ → 集計・xG・ハイライト・アドバイス</small></div>
+    </div>
+    <input id="gameTitle" class="title-input" type="text" placeholder="試合名（例：秋季リーグ 第3節）" aria-label="試合名">
+    <span id="modeChip" class="mode-chip"></span>
+    <button class="btn resume" id="btnResume" hidden></button>
+    <div class="top-actions">
+      <button class="btn primary" id="btnLoad" title="試合の動画ファイルを選びます（ドラッグ＆ドロップもOK）">📂 動画を読み込む</button>
+      <button class="btn" id="btnSample" title="内蔵のサンプル試合を開きます">サンプル試合</button>
+      <button class="btn" id="btnDemo" title="自動デモをもう一度見ます">▶ デモ</button>
+      <button class="btn ghost" id="btnHelp" title="キーボードショートカット（?）">⌨ ショートカット</button>
+    </div>
+    <input id="fileInput" type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" hidden>
+  </header>
+
+  <main class="layout">
+    <section class="left" id="leftCol" aria-label="動画とタイムライン">
+      <div class="stage empty" id="stage" data-kind="none">
+        <video id="vid" playsinline preload="auto"></video>
+        <canvas id="simCanvas" width="1280" height="720"></canvas>
+        <div class="stage-empty">
+          <div class="se-icon">🎬</div>
+          <h2>試合の動画を読み込みましょう</h2>
+          <p>ここに動画ファイルをドラッグ＆ドロップ、または下のボタンから選びます。<br><span class="dim">MP4（H.264）推奨。動画は外部に送信されません（このブラウザの中だけで処理します）。</span></p>
+          <div class="row gap center">
+            <button class="btn primary" data-act="stage-load">📂 動画を選ぶ</button>
+            <button class="btn" data-act="stage-sample">サンプル試合で試す</button>
+          </div>
+        </div>
+        <div class="hud" id="hud">
+          <div class="scorebug" id="scorebug" hidden></div>
+          <div class="cliptag" id="clipTag" hidden></div>
+          <div class="stage-toasts" id="stageToasts"></div>
+          <div class="keyflash" id="keyFlash"></div>
+        </div>
+        <div class="drop-hint">ここにドロップして読み込み</div>
+      </div>
+
+      <div class="transport" id="transport">
+        <button class="tbtn" id="tpPrev" title="前のタグへ（↑）">⏮</button>
+        <button class="tbtn" id="tpBack" title="5秒戻る（←）">⏪</button>
+        <button class="tbtn play" id="tpPlay" title="再生（Space）">▶</button>
+        <button class="tbtn" id="tpFwd" title="5秒進む（→）">⏩</button>
+        <button class="tbtn" id="tpNext" title="次のタグへ（↓）">⏭</button>
+        <span class="timecode" id="tpTime">0:00.0 / 0:00</span>
+        <span class="grow"></span>
+        <select id="tpSpeed" class="speed" title="再生速度（[ ]）" aria-label="再生速度"></select>
+        <button class="tbtn" id="tpMute" title="音声">🔊</button>
+      </div>
+
+      <div class="timeline-box">
+        <div class="tl-tools">
+          <span class="tl-title">タイムライン</span>
+          <span class="tl-legend"><i class="lg-goal"></i>ゴール <i class="lg-shot"></i>シュート <i class="lg-tov"></i>ロスト <i class="lg-foul"></i>ファウル <i class="lg-yc"></i>カード</span>
+          <span class="grow"></span>
+          <button class="zbtn on" data-zoom="0">全体</button>
+          <button class="zbtn" data-zoom="600">10分</button>
+          <button class="zbtn" data-zoom="120">2分</button>
+          <button class="zbtn" data-zoom="30">30秒</button>
+        </div>
+        <canvas id="timeline" aria-label="タイムライン。クリックでその位置へ移動"></canvas>
+        <div class="tl-tip" id="tlTip" hidden></div>
+      </div>
+    </section>
+
+    <section class="right" aria-label="分析">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="panels" id="panels"></div>
+    </section>
+  </main>
+</div>
+
+<!-- 自動デモ -->
+<div class="demo-layer" id="demoLayer" hidden>
+  <div class="ghost-cursor" id="ghost" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="30" height="30"><path d="M3 2l17 8.2-7.2 2.2L10 20z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </div>
+</div>
+<div class="demo-cap" id="demoCap" hidden role="status" aria-live="polite">
+  <div class="dc-top">
+    <span class="dc-step" id="dcStep">デモ</span>
+    <span class="dc-dots" id="dcDots"></span>
+    <span class="grow"></span>
+    <button class="btn sm ghost" id="dcNext" title="次のステップへ">⏭ 次へ</button>
+    <button class="btn sm primary" id="dcSkip" title="デモを止めて、自分で操作します">✋ 自分で操作する</button>
+  </div>
+  <div class="dc-title" id="dcTitle"></div>
+  <div class="dc-text" id="dcText"></div>
+  <div class="dc-foot">クリック・キー入力・スクロールでいつでも操作を引き継げます</div>
+</div>
+<div class="demo-dock" id="demoDock" hidden>
+  <span class="dk-msg"></span>
+  <button class="btn sm" id="dkReplay">▶ デモをもう一度</button>
+  <button class="btn sm primary" id="dkLoad">📂 自分の動画を読み込む</button>
+  <button class="ricon" id="dkClose" title="閉じる">✕</button>
+</div>
+
+<dialog id="editDlg" class="dlg"></dialog>
+<dialog id="helpDlg" class="dlg"></dialog>
+<dialog id="askDlg" class="dlg"></dialog>
+
+<script src="js/util.js"></script>
+<script src="js/model.js"></script>
+<script src="js/xg.js"></script>
+<script src="js/derive.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/goals.js"></script>
+<script src="js/advice.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/simdraw.js"></script>
+<script src="js/pitch.js"></script>
+<script src="js/player.js"></script>
+<script src="js/timeline.js"></script>
+<script src="js/tagger.js"></script>
+<script src="js/highlights.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/views-tag.js"></script>
+<script src="js/views-stats.js"></script>
+<script src="js/views-shots.js"></script>
+<script src="js/views-advice.js"></script>
+<script src="js/views-hl.js"></script>
+<script src="js/views-misc.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

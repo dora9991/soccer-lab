@@ -1,0 +1,11 @@
+{
+  "name": "soccer-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "サッカー分析ラボ — 試合動画にタグを付けるだけで、個人成績・xG・ショットマップ・得点/失点シーンのハイライト・アドバイスを作るブラウザアプリ",
+  "scripts": {
+    "test": "node tests/run.cjs",
+    "build": "node build.mjs",
+    "dev": "node tests/devserver.cjs"
+  }
+}

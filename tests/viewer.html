@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>sim viewer</title>
+<style>body{margin:0;background:#111;color:#eee;font:13px system-ui}canvas{width:100%;max-width:1280px;display:block}#bar{padding:6px;display:flex;gap:8px;align-items:center}input[type=range]{flex:1}</style></head>
+<body><div id="bar"><button id="pl">▶</button><span id="tm"></span><input id="sl" type="range" min="0" max="1000" value="0"><select id="sp"><option>1</option><option>2</option><option>4</option></select></div>
+<canvas id="cv" width="1280" height="720"></canvas>
+<script src="../js/util.js"></script><script src="../js/model.js"></script><script src="../js/xg.js"></script><script src="../js/derive.js"></script><script src="../js/sim.js"></script><script src="../js/simdraw.js"></script>
+<script>
+const seed = +(new URLSearchParams(location.search).get('seed') || 1);
+const t0 = performance.now();
+const data = SL.sim.build(seed);
+document.title = 'built ' + Math.round(performance.now() - t0) + 'ms';
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let t = +(new URLSearchParams(location.search).get('t') || 0), playing = false, last = 0;
+const sl = document.getElementById('sl'), tm = document.getElementById('tm');
+function draw() { SL.sim.render(ctx, 1280, 720, t, data); tm.textContent = t.toFixed(1) + ' / ' + data.duration.toFixed(0); sl.value = t / data.duration * 1000; }
+document.getElementById('pl').onclick = () => { playing = !playing; };
+sl.oninput = () => { t = sl.value / 1000 * data.duration; draw(); };
+function loop(now) { const dt = last ? (now - last) / 1000 : 0; last = now; if (playing) { t += dt * +document.getElementById('sp').value; if (t > data.duration) t = 0; } draw(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+window.__setT = (v) => { t = v; draw(); };
+</script></body></html>
